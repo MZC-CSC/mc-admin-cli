@@ -60,6 +60,19 @@ git clone https://github.com/m-cmp/mc-admin-cli.git
 cd mc-admin-cli/bin
 ```
 
+## Step 1-1. mcc 바이너리 동작 확인 (선택)
+
+진행 전 배포된 바이너리가 현재 시스템에서 실행되는지 확인하세요:
+```shell
+./mcc --version
+```
+
+아래와 같은 오류가 발생하면:
+```
+./mcc: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.34' not found
+```
+배포된 바이너리가 현재 OS보다 높은 GLIBC 버전을 필요로 합니다 (예: Ubuntu 20.04는 GLIBC 2.31 제공). 아래 [정적 바이너리 빌드](#정적-바이너리-빌드)를 참고하여 소스에서 직접 빌드 후 이 단계로 돌아오세요.
+
 ## Step 2. 배포 모드 선택
 
 환경에 맞는 모드를 선택하세요. `installAll.sh`가 대화형으로 안내하며, `.env` 파일을 수동으로 편집할 필요가 없습니다.
@@ -271,24 +284,38 @@ cd mc-admin-cli/bin
 
 ---
 
-# 소스 코드에서 운영자를 빌드하는 명령어
-```Shell
-$ git clone https://github.com/m-cmp/mc-admin-cli.git
-$ cd mc-admin-cli/src
+# 소스에서 빌드
 
-(의존성 설정)
-mc-admin-cli/src$ go get -u
+## 정적 바이너리 빌드
 
-(mcc용 바이너리 빌드)
-mc-admin-cli/src$ go build -o mcc
+배포된 `bin/mcc` 실행 시 GLIBC 버전 오류가 발생하는 경우 (예: Ubuntu 20.04 또는 GLIBC 2.34 미만 환경) 소스에서 정적으로 빌드하세요:
 
-**기계의 os 타입에 따라 Makerfile을 사용하여 mcc용 바이너리 빌드**
-mc-admin-cli/src$ make
-mc-admin-cli/src$ make win
-mc-admin-cli/src$ make mac
-mc-admin-cli/src$ make linux-arm
-mc-admin-cli/src$ make win86
-mc-admin-cli/src$ make mac-arm
+```shell
+cd mc-admin-cli/src
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../bin/mcc
+```
+
+`CGO_ENABLED=0`으로 빌드하면 GLIBC 의존성 없는 완전 정적 바이너리가 생성됩니다. GLIBC 버전과 무관하게 모든 Linux 배포판에서 실행됩니다.
+
+> **최소 Go 버전**: 1.21 이상. Go가 없는 경우 https://go.dev/dl/ 에서 설치하세요.
+
+## 플랫폼별 빌드 (Makefile)
+
+```shell
+cd mc-admin-cli/src
+
+# 의존성 설치 / 업데이트
+go get -u
+
+# 현재 플랫폼으로 빌드 (기본: linux amd64)
+make
+
+# 다른 타겟으로 크로스 컴파일
+make win        # Windows amd64
+make mac        # macOS amd64
+make linux-arm  # Linux arm64
+make win86      # Windows 386
+make mac-arm    # macOS arm64
 ```
 
 # mcc 사용 방법

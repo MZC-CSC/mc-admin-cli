@@ -79,6 +79,19 @@ git clone https://github.com/m-cmp/mc-admin-cli.git
 cd mc-admin-cli/bin
 ```
 
+## Step 1-1. Verify mcc Binary (Optional)
+
+Before proceeding, confirm the pre-built binary runs on your system:
+```shell
+./mcc --version
+```
+
+If you see an error like:
+```
+./mcc: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.34' not found
+```
+the pre-built binary requires a newer GLIBC than your OS provides (e.g. Ubuntu 20.04 ships GLIBC 2.31). Rebuild from source as a static binary — see [Build a Static Binary](#build-a-static-binary) below — then return here.
+
 ## Step 2. Choose Deployment Mode
 
 Decide which mode fits your environment. `installAll.sh` will prompt you interactively — no manual `.env` editing required.
@@ -290,24 +303,38 @@ The following ports must be registered in the firewall:
 
 ---
 
-# Command to build the operator from souce code
-```Shell
-$ git clone https://github.com/m-cmp/mc-admin-cli.git
-$ cd mc-admin-cli/src
+# Build from Source
 
-(Setup dependencies)
-mc-admin-cli/src$ go get -u
+## Build a Static Binary
 
-(Build a binary for mcc)
-mc-admin-cli/src$ go build -o mcc
+Use this when the pre-built `bin/mcc` fails with a GLIBC version error (e.g. on Ubuntu 20.04 or other systems with GLIBC < 2.34):
 
-**Build a binary for mcc using Makerfile depends on your machine\'s os type**
-mc-admin-cli/src$ make
-mc-admin-cli/src$ make win
-mc-admin-cli/src$ make mac
-mc-admin-cli/src$ make linux-arm
-mc-admin-cli/src$ make win86
-mc-admin-cli/src$ make mac-arm
+```shell
+cd mc-admin-cli/src
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../bin/mcc
+```
+
+`CGO_ENABLED=0` produces a fully statically linked binary with no GLIBC dependency. The resulting binary runs on any Linux distribution regardless of the installed GLIBC version.
+
+> **Minimum Go version**: 1.21 or later. Install Go from https://go.dev/dl/ if not already available.
+
+## Platform-Specific Builds (Makefile)
+
+```shell
+cd mc-admin-cli/src
+
+# Install / update dependencies
+go get -u
+
+# Build for current platform (default: linux amd64)
+make
+
+# Cross-compile for other targets
+make win        # Windows amd64
+make mac        # macOS amd64
+make linux-arm  # Linux arm64
+make win86      # Windows 386
+make mac-arm    # macOS arm64
 ```
 
 # How to use the mcc
