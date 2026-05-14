@@ -28,24 +28,27 @@ CURRENT_GROUP=$(id -gn)
 
 echo "Current user: ${CURRENT_USER}:${CURRENT_GROUP}"
 
-# This script only needs write access to certs/ and nginx/ subdirectories.
-# Other subdirs (postgres/, keycloak/) are Docker-managed and may be root-owned
-# from a previous run — chown-ing the entire tree would fail. Only target what we need.
+# Only the certs/ and nginx/ subdirs need to be writable by this script.
+# postgres/ and keycloak/ are Docker-managed and may be root-owned from a
+# previous run — do not touch them. Newly mkdir'd dirs are user-owned automatically,
+# so chown is unnecessary. If mkdir or the writable check fails, the root-owned
+# state must be cleared first via cleanAll.sh (which handles sudo interactively).
 for _dir in "${CERT_PARENT_DIR}/certs" "${CERT_PARENT_DIR}/nginx"; do
     if ! mkdir -p "$_dir" 2>/dev/null; then
-        echo "⚠️  Cannot create $_dir (root-owned parent). Requesting sudo..."
-        sudo mkdir -p "$_dir" || { echo "Error: Failed to create $_dir"; exit 1; }
+        echo "❌ Error: Cannot create $_dir"
+        echo "   A previous Docker run likely left root-owned files in the parent directory."
+        echo "   Please run the cleanup script first, then re-run installAll.sh:"
+        echo "       cd ${SCRIPT_DIR}/../../bin && ./cleanAll.sh"
+        exit 1
     fi
-    if ! chown -R "${CURRENT_USER}:${CURRENT_GROUP}" "$_dir" 2>/dev/null; then
-        echo "⚠️  Root-owned files in $_dir (from previous Docker run). Requesting sudo..."
-        sudo chown -R "${CURRENT_USER}:${CURRENT_GROUP}" "$_dir" || {
-            echo "Error: Failed to set permissions on $_dir"
-            echo "  Please run: sudo chown -R ${CURRENT_USER}:${CURRENT_GROUP} $_dir"
-            exit 1
-        }
+    if [ ! -w "$_dir" ]; then
+        echo "❌ Error: $_dir exists but is not writable by ${CURRENT_USER}."
+        echo "   Please run the cleanup script first, then re-run installAll.sh:"
+        echo "       cd ${SCRIPT_DIR}/../../bin && ./cleanAll.sh"
+        exit 1
     fi
 done
-echo "✓ Certificate and nginx directories created and permissions set"
+echo "✓ Certificate and nginx directories ready"
 
 
 # 템플릿 파일 경로
