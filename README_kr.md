@@ -298,9 +298,9 @@ cd mc-admin-cli/bin
 # 1. 모든 사전 조건 컨테이너가 healthy인지 확인
 cd bin && ./mcc infra info
 
-# 2. post-init 컨테이너 재실행 (멱등성 보장 — 반복 실행 안전)
-cd ../conf/docker
-docker compose up -d --force-recreate mc-iam-manager-post-initial
+# 2. 종료된 post-init 컨테이너를 제거한 뒤 재실행 (멱등성 보장 — 반복 실행 안전)
+docker rm mc-iam-manager-post-initial 2>/dev/null
+./mcc infra run -s mc-iam-manager-post-initial
 docker logs -f mc-iam-manager-post-initial
 # 8단계 각각이 ✓ 로 완료되어야 합니다
 

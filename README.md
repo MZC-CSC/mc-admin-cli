@@ -317,9 +317,9 @@ the post-init container started before `mc-iam-manager` finished its first boot.
 # 1. Confirm all prerequisites are healthy
 cd bin && ./mcc infra info
 
-# 2. Re-run the post-init container (idempotent — safe to repeat)
-cd ../conf/docker
-docker compose up -d --force-recreate mc-iam-manager-post-initial
+# 2. Remove the exited post-init container, then re-run it (idempotent — safe to repeat)
+docker rm mc-iam-manager-post-initial 2>/dev/null
+./mcc infra run -s mc-iam-manager-post-initial
 docker logs -f mc-iam-manager-post-initial
 # Each of the 8 setup steps should finish with ✓
 

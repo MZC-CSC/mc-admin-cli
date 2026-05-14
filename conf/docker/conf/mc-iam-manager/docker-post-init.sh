@@ -100,8 +100,8 @@ To recover manually:
    Confirm mc-iam-manager and mc-infra-manager are both running.
 
 3. Re-run the post-init container (idempotent — safe to repeat):
-       cd conf/docker
-       docker compose up -d --force-recreate mc-iam-manager-post-initial
+       docker rm mc-iam-manager-post-initial 2>/dev/null
+       cd <repo>/bin && ./mcc infra run -s mc-iam-manager-post-initial
        docker logs -f mc-iam-manager-post-initial
 
    Each of the 8 setup steps should finish with ✓.
