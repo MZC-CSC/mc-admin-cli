@@ -28,9 +28,24 @@ CURRENT_GROUP=$(id -gn)
 
 echo "Current user: ${CURRENT_USER}:${CURRENT_GROUP}"
 
-mkdir -p "${CERT_PARENT_DIR}" || { echo "Error: Failed to create ${CERT_PARENT_DIR}"; exit 1; }
-chown -R "${CURRENT_USER}:${CURRENT_GROUP}" "${CERT_PARENT_DIR}" || { echo "Error: Failed to change ownership of ${CERT_PARENT_DIR}"; exit 1; }
-echo "✓ Container volume directory created and permissions set"
+# This script only needs write access to certs/ and nginx/ subdirectories.
+# Other subdirs (postgres/, keycloak/) are Docker-managed and may be root-owned
+# from a previous run — chown-ing the entire tree would fail. Only target what we need.
+for _dir in "${CERT_PARENT_DIR}/certs" "${CERT_PARENT_DIR}/nginx"; do
+    if ! mkdir -p "$_dir" 2>/dev/null; then
+        echo "⚠️  Cannot create $_dir (root-owned parent). Requesting sudo..."
+        sudo mkdir -p "$_dir" || { echo "Error: Failed to create $_dir"; exit 1; }
+    fi
+    if ! chown -R "${CURRENT_USER}:${CURRENT_GROUP}" "$_dir" 2>/dev/null; then
+        echo "⚠️  Root-owned files in $_dir (from previous Docker run). Requesting sudo..."
+        sudo chown -R "${CURRENT_USER}:${CURRENT_GROUP}" "$_dir" || {
+            echo "Error: Failed to set permissions on $_dir"
+            echo "  Please run: sudo chown -R ${CURRENT_USER}:${CURRENT_GROUP} $_dir"
+            exit 1
+        }
+    fi
+done
+echo "✓ Certificate and nginx directories created and permissions set"
 
 
 # 템플릿 파일 경로
