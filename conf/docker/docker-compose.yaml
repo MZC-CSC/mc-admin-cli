@@ -257,8 +257,6 @@ services:
         condition: service_healthy
       mc-iam-manager-kc:
         condition: service_healthy
-      mc-iam-manager-nginx:
-        condition: service_started
       mc-infra-manager:
         condition: service_healthy
     environment:
@@ -354,6 +352,7 @@ services:
       - "${MC_WORKFLOW_MANAGER_PROXY_PORT}:${MC_WORKFLOW_MANAGER_PROXY_PORT}"
       - "${MC_DATA_MANAGER_PROXY_PORT}:${MC_DATA_MANAGER_PROXY_PORT}"
       - "${MC_APPLICATION_MANAGER_PROXY_PORT}:${MC_APPLICATION_MANAGER_PROXY_PORT}"
+      - "${MC_APPLICATION_MANAGER_PORT}:${MC_APPLICATION_MANAGER_PORT}"
     environment:
       - DOMAIN_NAME=${MC_IAM_MANAGER_PUBLIC_DOMAIN}
     volumes:
@@ -362,12 +361,14 @@ services:
       - ./container-volume/certbot/www:/var/www/certbot:ro
     depends_on:
       - mc-iam-manager-kc
+      - mc-iam-manager
     networks:
       - mc-iam-manager-network
       - mc-observability-network
       - mc-cost-optimizer-network
       - mc-workflow-manager-network
       - mc-data-manager-network
+      - mc-application-manager-network
 
   mc-iam-manager-post-initial:
     image: ubuntu:22.04
@@ -807,13 +808,14 @@ services:
     depends_on:
       mc-application-manager-db:
         condition: service_healthy
+      mc-application-manager-sonatype-nexus:
+        condition: service_started
     networks:
       - mc-application-manager-network
       - mc-web-console-network
       - mc-observability-network
     ports:
       - target: 18084
-        published: ${MC_APPLICATION_MANAGER_PORT}
         protocol: tcp
     volumes:
       - ./tool/mcc:/app/tool/mcc
@@ -840,7 +842,7 @@ services:
 ##### MC-WORKFLOW-MANAGER #########################################################################################################################
 
   mc-workflow-manager-jenkins:
-    image: jenkins/jenkins:2.462.3-lts
+    image: jenkins/jenkins:lts-jdk17
     container_name: mc-workflow-manager-jenkins
     platform: linux/amd64
     networks:
@@ -995,8 +997,8 @@ services:
             exec docker-entrypoint.sh postgres"
 
   mc-web-console-api:
-    image: csescsta/mc-web-console-api:edge
-    pull_policy: never
+    image: cloudbaristaorg/mc-web-console-api:0.5.6
+    pull_policy: always
     container_name: mc-web-console-api
     platform: linux/amd64
     restart: unless-stopped
@@ -1039,7 +1041,7 @@ services:
       <<: *default-health-check
 
   mc-web-console-front:
-    image: csescsta/mc-web-console-front:edge
+    image: cloudbaristaorg/mc-web-console-front:0.5.6
     pull_policy: always
     container_name: mc-web-console-front
     platform: linux/amd64
