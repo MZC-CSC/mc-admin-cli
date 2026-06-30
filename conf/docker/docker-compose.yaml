@@ -1189,10 +1189,10 @@ services:
         condition: service_healthy
       mc-observability-infra:
         condition: service_healthy
-      mc-observability-influx:
-        condition: service_healthy
-      mc-observability-influx-2:
-        condition: service_healthy
+      mc-observability-influx-ready:
+        condition: service_completed_successfully
+      mc-observability-influx-2-ready:
+        condition: service_completed_successfully
       mc-observability-loki:
         condition: service_healthy
       mc-observability-maria:
@@ -1423,6 +1423,39 @@ services:
       retries: 30
       start_period: 120s
 
+  # Wait containers: poll until each influx instance is healthy, then exit 0.
+  # Dependent services use service_completed_successfully on these instead of
+  # service_healthy on influx directly, so they survive influx's init-exit-restart cycle.
+  mc-observability-influx-ready:
+    image: busybox:stable
+    container_name: mc-observability-influx-ready
+    restart: "no"
+    command:
+      - sh
+      - -c
+      - "until wget -qO /dev/null http://mc-observability-influx:8086/health 2>/dev/null; do sleep 3; done"
+    init: true
+    networks:
+      - mc-observability-network
+    depends_on:
+      mc-observability-influx:
+        condition: service_started
+
+  mc-observability-influx-2-ready:
+    image: busybox:stable
+    container_name: mc-observability-influx-2-ready
+    restart: "no"
+    command:
+      - sh
+      - -c
+      - "until wget -qO /dev/null http://mc-observability-influx-2:8086/health 2>/dev/null; do sleep 3; done"
+    init: true
+    networks:
+      - mc-observability-network
+    depends_on:
+      mc-observability-influx-2:
+        condition: service_started
+
 ##### Remove annotations if data inquiry is required with chronograf during development phase #####
 #  mc-observability-chronograf:
 #    image: chronograf:1.9.4
@@ -1589,8 +1622,8 @@ services:
     depends_on:
       mc-observability-maria:
         condition: service_healthy
-      mc-observability-influx:
-        condition: service_healthy
+      mc-observability-influx-ready:
+        condition: service_completed_successfully
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:9001/readyz" ]
       interval: 1m
@@ -1710,8 +1743,8 @@ services:
         published: ${MC_OBSERVABILITY_MCP_INFLUX_PORT}
         protocol: tcp
     depends_on:
-      mc-observability-influx:
-        condition: service_healthy
+      mc-observability-influx-ready:
+        condition: service_completed_successfully
     environment:
       - TZ=Asia/Seoul
       - INFLUXDB_URL=http://mc-observability-influx:8086
