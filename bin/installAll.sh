@@ -143,6 +143,47 @@ NO_HEALTH_CHECK_CONTAINERS=(
 )
 
 # =============================================================================
+# Startup Waves (reduce resource contention from starting 60+ services at once)
+# =============================================================================
+# Grouped along docker-compose.yaml's own subsystem sections. Only "entry
+# point" services need to be listed per wave -- compose brings up each one's
+# depends_on chain automatically (already-running dependencies are a no-op).
+# mc-application-manager/mc-cost-optimizer-* depend on mc-observability-rabbitmq,
+# so the observability backbone wave runs before the app-tier wave.
+STARTUP_WAVES=(
+    "mc-infra-connector mc-infra-manager mc-iam-manager mc-iam-manager-post-initial"
+    "mc-data-manager mc-web-console-api mc-web-console-front"
+    "mc-observability-manager mc-observability-front mc-observability-insight mc-observability-insight-scheduler mc-observability-mcp-grafana mc-observability-mcp-maria mc-observability-mcp-influx mc-observability-log-collector"
+    "mc-application-manager mc-workflow-manager mc-cost-optimizer-fe"
+)
+
+# Prints a consistent failure banner for a failed `./mcc infra run` invocation.
+report_run_failure() {
+    local exit_code="$1"
+    local context="$2"
+    echo ""
+    echo "=========================================="
+    echo "❌ Service startup failed (exit code: $exit_code)${context:+ - $context}."
+    echo "Review the compose output above for the failing service."
+    echo "Check status:  ./mcc infra info"
+    echo "Check logs:    docker logs <container_name>"
+    echo "=========================================="
+}
+
+# mc-iam-manager-post-initial is excluded from EXPECTED_CONTAINERS (it's a
+# one-shot init container), so its completion is checked separately here.
+check_post_initial() {
+    local pi_exit
+    pi_exit=$(docker inspect --format='{{.State.ExitCode}}' mc-iam-manager-post-initial 2>/dev/null)
+    if [ "$pi_exit" != "0" ]; then
+        echo ""
+        echo "⚠️  mc-iam-manager-post-initial did not complete successfully (or never ran)."
+        echo "Run the recovery script to finish IAM initialization:"
+        echo "   ./bin/iam_manager_init.sh"
+    fi
+}
+
+# =============================================================================
 
 # Save current directory at script start
 ORIGINAL_DIR="$(pwd)"
@@ -486,12 +527,25 @@ case $RUN_MODE in
         }
         
         # Run in log mode
-        if [ -f "./mcc" ]; then
-            ./mcc infra run || true
-        else
+        if [ ! -f "./mcc" ]; then
             echo "Error: Cannot find mcc executable file."
             exit 1
         fi
+
+        wave_num=0
+        for wave_services in "${STARTUP_WAVES[@]}"; do
+            wave_num=$((wave_num + 1))
+            echo ""
+            echo "---- Wave $wave_num/${#STARTUP_WAVES[@]}: $wave_services ----"
+            ./mcc infra run -s "$wave_services"
+            run_exit=$?
+            if [ $run_exit -ne 0 ]; then
+                report_run_failure "$run_exit" "Wave $wave_num ($wave_services)"
+                exit 1
+            fi
+        done
+
+        check_post_initial
         ;;
     background)
         echo ""
@@ -505,127 +559,154 @@ case $RUN_MODE in
         }
         
         # Run in background mode
-        if [ -f "./mcc" ]; then
-            echo "Starting service in background..."
-            echo "Image download and initial setup in progress..."
-            echo ""
-            
-            # Run in background but show initial logs
-            ./mcc infra run -d
-            
-            echo ""
-            echo "Image download and initial setup completed."
-            echo "Monitoring container status..."
-            echo ""
-            
-            # Container monitoring function
-            monitor_containers() {
-                local all_healthy=false
-                local check_count=0
-                local max_checks=120  # 20 minutes (120 * 10 seconds)
-                
-                while [ "$all_healthy" = false ] && [ $check_count -lt $max_checks ]; do
-                    clear
-                    echo "=========================================="
-                    echo "Container Status Monitoring"
-                    echo "=========================================="
-                    echo ""
-                    
-                    # Get container status (sorted by name)
-                    local container_status=$(docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(mc-|opensearch-)" | sort)
-                    
-                    if [ -n "$container_status" ]; then
-                        echo "$container_status"
-                    else
-                        echo "Containers have not started yet..."
-                        echo "Image download and initial setup in progress..."
-                    fi
-                    
-                    echo ""
-                    echo "=========================================="
-                    
-                    # Check currently running container status (including mc- and opensearch-)
-                    local running_containers=$(docker ps --format "{{.Names}}\t{{.Status}}" 2>/dev/null | grep -E "(mc-|opensearch-)" | sort)
-                    local all_expected_running=true
-                    local unhealthy_count=0
-                    local running_count=0
-                    local missing_containers=()
-                    
-                    # Check if each expected container is running and healthy
-                    for container in "${EXPECTED_CONTAINERS[@]}"; do
-                        if echo "$running_containers" | grep -q "^$container"; then
-                            running_count=$((running_count + 1))
-                            
-                            # Containers without health check are treated as successful when Up
-                            local is_no_health_check=false
-                            for no_health_container in "${NO_HEALTH_CHECK_CONTAINERS[@]}"; do
-                                if [ "$container" = "$no_health_container" ]; then
-                                    is_no_health_check=true
-                                    break
-                                fi
-                            done
-                            
-                            if [ "$is_no_health_check" = true ]; then
-                                # Containers without health check are successful if Up
-                                if echo "$running_containers" | grep "^$container" | grep -q "Up"; then
-                                    # Success (just increment count)
-                                    :
-                                else
-                                    unhealthy_count=$((unhealthy_count + 1))
-                                fi
-                            else
-                                # Containers with health check verify healthy status
-                                if echo "$running_containers" | grep "^$container" | grep -q "unhealthy\|starting\|restarting"; then
-                                    unhealthy_count=$((unhealthy_count + 1))
-                                fi
-                            fi
-                        else
-                            all_expected_running=false
-                            missing_containers+=("$container")
-                        fi
-                    done
-                    
-                    # Display list of containers waiting to start
-                    if [ ${#missing_containers[@]} -gt 0 ]; then
-                        echo ""
-                        echo "Containers waiting to start:"
-                        printf "  %s\n" "${missing_containers[@]}"
-                    fi
-                    
-                    # Check if all expected containers are running and healthy
-                    if [ "$all_expected_running" = true ] && [ "$unhealthy_count" -eq 0 ] && [ "$running_count" -gt 0 ]; then
-                        all_healthy=true
-                        echo ""
-                        echo "🎉 All environments have been set up!"
-                        echo ""
-                        echo "Final container status:"
-                        echo "$container_status"
-                        echo ""
-                        echo "To access the web console: http://localhost:3001"
-                        break
-                    else
-                        echo ""
-                        echo "Checking status again in 10 seconds... (${check_count}/${max_checks})"
-                        check_count=$((check_count + 1))
-                        sleep 10
-                    fi
-                done
-                
-                if [ "$all_healthy" = false ]; then
-                    echo ""
-                    echo "⚠️  Some containers did not reach healthy status."
-                    echo "To check status: ./mcc infra info"
-                    echo "To check logs: docker logs <container_name>"
-                fi
-            }
-            
-            # Start container monitoring
-            monitor_containers
-            
-        else
+        if [ ! -f "./mcc" ]; then
             echo "Error: Cannot find mcc executable file."
             exit 1
         fi
+
+        echo "Starting service in background..."
+        echo "Image download and initial setup in progress..."
+        echo ""
+
+        wave_num=0
+        for wave_services in "${STARTUP_WAVES[@]}"; do
+            wave_num=$((wave_num + 1))
+            echo ""
+            echo "---- Wave $wave_num/${#STARTUP_WAVES[@]}: $wave_services ----"
+            ./mcc infra run -d -s "$wave_services"
+            run_exit=$?
+            if [ $run_exit -ne 0 ]; then
+                report_run_failure "$run_exit" "Wave $wave_num ($wave_services)"
+                exit 1
+            fi
+        done
+
+        echo ""
+        echo "Image download and initial setup completed."
+        echo "Monitoring container status..."
+        echo ""
+
+        # Container monitoring function -- final sanity check across all waves
+        monitor_containers() {
+            local all_healthy=false
+            local check_count=0
+            local max_checks=120  # 20 minutes (120 * 10 seconds)
+
+            while [ "$all_healthy" = false ] && [ $check_count -lt $max_checks ]; do
+                clear
+                echo "=========================================="
+                echo "Container Status Monitoring"
+                echo "=========================================="
+                echo ""
+
+                # Get container status (sorted by name) -- include Created/Exited (-a)
+                local container_status=$(docker ps -a --format "table {{.Names}}\t{{.Status}}" | grep -E "(mc-|opensearch-)" | sort)
+
+                if [ -n "$container_status" ]; then
+                    echo "$container_status"
+                else
+                    echo "Containers have not started yet..."
+                    echo "Image download and initial setup in progress..."
+                fi
+
+                echo ""
+                echo "=========================================="
+
+                # -a so a container Compose created but never started (aborted
+                # graph) is visible instead of looking identical to "not yet pulled"
+                local all_containers=$(docker ps -a --format "{{.Names}}\t{{.Status}}" 2>/dev/null | grep -E "(mc-|opensearch-)" | sort)
+                local all_expected_running=true
+                local unhealthy_count=0
+                local running_count=0
+                local missing_containers=()
+                local failed_containers=()
+
+                # Check if each expected container is running and healthy
+                for container in "${EXPECTED_CONTAINERS[@]}"; do
+                    local line
+                    line=$(echo "$all_containers" | grep "^$container[[:space:]]")
+
+                    if [ -z "$line" ]; then
+                        # Not created yet at all -- still pulling/waiting its turn
+                        all_expected_running=false
+                        missing_containers+=("$container")
+                    elif echo "$line" | grep -q "Up"; then
+                        running_count=$((running_count + 1))
+
+                        # Containers without health check are treated as successful when Up
+                        local is_no_health_check=false
+                        for no_health_container in "${NO_HEALTH_CHECK_CONTAINERS[@]}"; do
+                            if [ "$container" = "$no_health_container" ]; then
+                                is_no_health_check=true
+                                break
+                            fi
+                        done
+
+                        if [ "$is_no_health_check" = true ]; then
+                            : # Up is success for containers without a health check
+                        else
+                            if echo "$line" | grep -q "unhealthy\|starting\|restarting"; then
+                                unhealthy_count=$((unhealthy_count + 1))
+                            fi
+                        fi
+                    elif echo "$line" | grep -qE "Created|Exited"; then
+                        # Compose created it but the graph aborted before start --
+                        # this will not resolve on its own, unlike "still pulling"
+                        all_expected_running=false
+                        failed_containers+=("$container: $(echo "$line" | awk -F'\t' '{print $2}')")
+                    fi
+                done
+
+                # Display list of containers waiting to start
+                if [ ${#missing_containers[@]} -gt 0 ]; then
+                    echo ""
+                    echo "Containers waiting to start:"
+                    printf "  %s\n" "${missing_containers[@]}"
+                fi
+
+                # Containers stuck Created/Exited will never recover on their own --
+                # stop polling immediately instead of waiting out the full timeout
+                if [ ${#failed_containers[@]} -gt 0 ]; then
+                    echo ""
+                    echo "❌ The following containers failed to start (Compose likely aborted the startup graph):"
+                    printf "  %s\n" "${failed_containers[@]}"
+                    break
+                fi
+
+                # Check if all expected containers are running and healthy
+                if [ "$all_expected_running" = true ] && [ "$unhealthy_count" -eq 0 ] && [ "$running_count" -gt 0 ]; then
+                    all_healthy=true
+                    echo ""
+                    echo "🎉 All environments have been set up!"
+                    echo ""
+                    echo "Final container status:"
+                    echo "$container_status"
+                    echo ""
+                    echo "To access the web console: http://localhost:3001"
+                    break
+                else
+                    echo ""
+                    echo "Checking status again in 10 seconds... (${check_count}/${max_checks})"
+                    check_count=$((check_count + 1))
+                    sleep 10
+                fi
+            done
+
+            if [ "$all_healthy" = false ]; then
+                echo ""
+                echo "⚠️  Some containers did not reach healthy status."
+                echo "To check status: ./mcc infra info"
+                echo "To check logs: docker logs <container_name>"
+                return 1
+            fi
+            return 0
+        }
+
+        # Start container monitoring
+        monitor_containers
+        monitor_exit=$?
+        check_post_initial
+        exit $monitor_exit
         ;;
     skip)
         echo ""
