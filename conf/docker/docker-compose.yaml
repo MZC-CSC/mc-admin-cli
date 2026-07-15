@@ -268,6 +268,8 @@ services:
       - ./conf/mc-iam-manager/.env
     volumes:
       - ./tool/mcc:/app/tool/mcc
+      # Role-menu seed overlay (SSOT bundle; post-init calls YAML API without filePath)
+      - ./conf/mc-iam-manager/permission.yaml:/app/asset/menu/permission.yaml:ro
     healthcheck:
       test: [ "CMD", "/app/tool/mcc", "rest", "get", "http://${MC_IAM_MANAGER_DOMAIN}:${MC_IAM_MANAGER_PORT}/readyz" ]
       <<: *default-health-check

@@ -42,6 +42,15 @@ auto_setup() {
         return 1
     fi
     echo "✓ Menu data initialized successfully"
+
+    # 4-1. Role-menu permissions from YAML (after menus; fail-fast if IAM lacks YAML API)
+    echo "Step 4-1: Initializing role-menu permissions from YAML..."
+    init_menu_permissions
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Role-menu permission (YAML) initialization failed"
+        return 1
+    fi
+    echo "✓ Role-menu permissions initialized successfully"
     
     # 5. API resource data initialization
     echo "Step 5: Initializing API resources..."
@@ -309,6 +318,46 @@ init_menu() {
     fi
     
     echo "Menu data initialized"
+    return 0
+}
+
+# Seed role-menu mappings via YAML API.
+# Always call without filePath: IAM resolvePermissionSeedPath uses
+# MC_WEB_CONSOLE_MENU_PERMISSIONS_YAML (if set) or mounted
+# /app/asset/menu/permission.yaml. Do not pass post-init ./permission.yaml
+# as filePath — that path is not visible inside the IAM container.
+init_menu_permissions() {
+    echo "Initializing role-menu permissions from YAML..."
+
+    url="$MC_IAM_MANAGER_HOST/api/setup/initial-role-menu-permission-yaml"
+    echo "Calling YAML permission seed without filePath (server resolvePermissionSeedPath)"
+    http_and_body=$(curl -s -w "\n%{http_code}" -X GET \
+        --header "Authorization: Bearer $MC_IAM_MANAGER_PLATFORMADMIN_ACCESSTOKEN" \
+        --header 'Content-Type: application/json' \
+        "$url")
+
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Failed to call initial-role-menu-permission-yaml"
+        return 1
+    fi
+
+    http_code=$(printf '%s\n' "$http_and_body" | tail -n1)
+    response=$(printf '%s\n' "$http_and_body" | sed '$d')
+
+    echo "Menu permission (YAML) initialization response (HTTP $http_code): $response"
+
+    if [ "$http_code" != "200" ]; then
+        echo "ERROR: Menu permission (YAML) initialization failed (HTTP $http_code)"
+        echo "Ensure IAM image includes YAML seed API and permission.yaml is mounted."
+        return 1
+    fi
+
+    if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+        echo "ERROR: Menu permission (YAML) initialization failed"
+        return 1
+    fi
+
+    echo "Role-menu permissions initialized from YAML"
     return 0
 }
 

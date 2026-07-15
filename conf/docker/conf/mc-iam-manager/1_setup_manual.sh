@@ -92,6 +92,42 @@ init_menu() {
     echo "Menu data initialized"
 }
 
+# Seed role-menu mappings via YAML API (no filePath — IAM uses mounted asset or YAML env URL).
+init_menu_permissions() {
+    echo "Initializing role-menu permissions from YAML..."
+
+    url="$MC_IAM_MANAGER_HOST/api/setup/initial-role-menu-permission-yaml"
+    echo "Calling YAML permission seed without filePath (server resolvePermissionSeedPath)"
+    http_and_body=$(curl -s -w "\n%{http_code}" -X GET \
+        --header "Authorization: Bearer $MC_IAM_MANAGER_PLATFORMADMIN_ACCESSTOKEN" \
+        --header 'Content-Type: application/json' \
+        "$url")
+
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Failed to call initial-role-menu-permission-yaml"
+        return 1
+    fi
+
+    http_code=$(printf '%s\n' "$http_and_body" | tail -n1)
+    response=$(printf '%s\n' "$http_and_body" | sed '$d')
+
+    echo "Menu permission (YAML) initialization response (HTTP $http_code): $response"
+
+    if [ "$http_code" != "200" ]; then
+        echo "ERROR: Menu permission (YAML) initialization failed (HTTP $http_code)"
+        echo "Ensure IAM image includes YAML seed API and permission.yaml is mounted."
+        return 1
+    fi
+
+    if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+        echo "ERROR: Menu permission (YAML) initialization failed"
+        return 1
+    fi
+
+    echo "Role-menu permissions initialized from YAML"
+    return 0
+}
+
 init_api_resources() {
     echo "Initializing API resources..."
     wget -q -O ./api.yaml "$MC_ADMIN_CLI_APIYAML"
@@ -223,7 +259,8 @@ while true; do
     echo "1. Init Platform And PlatformAdmin"
     echo "2. PlatformAdmin Login"
     echo "3. Init Role Data"
-    echo "4. Init Menu Data"
+    echo "4. Init Menu Data (+ role-menu YAML permissions)"
+    echo "4a. Init Menu Role Permissions (YAML) (re-seed only)"
     echo "5. Init API Resource Data"
     echo "6. Init Cloud Resource Data"
     echo "7. Map API-Cloud Resources"
@@ -259,6 +296,15 @@ while true; do
                 echo "Current token value: '$MC_IAM_MANAGER_PLATFORMADMIN_ACCESSTOKEN'"
             else
                 init_menu
+                init_menu_permissions
+            fi
+            ;;
+        4a)
+            if [ -z "$MC_IAM_MANAGER_PLATFORMADMIN_ACCESSTOKEN" ]; then
+                echo "Please login first (option 2)"
+                echo "Current token value: '$MC_IAM_MANAGER_PLATFORMADMIN_ACCESSTOKEN'"
+            else
+                init_menu_permissions
             fi
             ;;
         5)
