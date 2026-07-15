@@ -92,7 +92,8 @@ init_menu() {
     echo "Menu data initialized"
 }
 
-# Seed role-menu mappings via YAML API (no filePath — IAM uses mounted asset or YAML env URL).
+# Seed role-menu mappings via YAML API (no filePath — IAM uses
+# MC_WEB_CONSOLE_MENU_PERMISSIONS or mounted asset/menu/permission.yaml).
 init_menu_permissions() {
     echo "Initializing role-menu permissions from YAML..."
 
