@@ -323,7 +323,7 @@ init_menu() {
 
 # Seed role-menu mappings via YAML API.
 # Always call without filePath: IAM resolvePermissionSeedPath uses
-# MC_WEB_CONSOLE_MENU_PERMISSIONS_YAML (if set) or mounted
+# MC_WEB_CONSOLE_MENU_PERMISSIONS (if set and .yaml/.yml) or mounted
 # /app/asset/menu/permission.yaml. Do not pass post-init ./permission.yaml
 # as filePath — that path is not visible inside the IAM container.
 init_menu_permissions() {
