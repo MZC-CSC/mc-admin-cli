@@ -9,22 +9,23 @@ import (
 
 // runCmd represents the run command
 var runCmd = &cobra.Command{
-	Use:   "run",
-	Short: "Setup and Run M-CMP System",
-	Long:  `Setup and Run M-CMP System`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Use:          "run",
+	Short:        "Setup and Run M-CMP System",
+	Long:         `Setup and Run M-CMP System`,
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println("\n[Setup and Run M-CMP]")
 		fmt.Println()
 
 		if DockerFilePath == "" {
-			fmt.Println("--file (-f) argument is required but not provided.")
+			return fmt.Errorf("--file (-f) argument is required but not provided")
 		} else if detachFlag {
 			cmdStr := fmt.Sprintf("COMPOSE_PROJECT_NAME=%s docker compose -f %s up -d %s", ComposeProjectName, DockerFilePath, ServiceName)
-			common.SysCall(cmdStr)
+			return common.SysCallWithError(cmdStr)
 		} else {
 			cmdStr := fmt.Sprintf("COMPOSE_PROJECT_NAME=%s docker compose -f %s up %s", ComposeProjectName, DockerFilePath, ServiceName)
 			//fmt.Println(cmdStr)
-			common.SysCall(cmdStr)
+			return common.SysCallWithError(cmdStr)
 		}
 
 	},
