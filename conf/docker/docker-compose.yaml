@@ -257,8 +257,6 @@ services:
         condition: service_healthy
       mc-iam-manager-kc:
         condition: service_healthy
-      mc-iam-manager-nginx:
-        condition: service_started
       mc-infra-manager:
         condition: service_healthy
     environment:
