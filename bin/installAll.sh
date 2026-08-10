@@ -142,6 +142,13 @@ NO_HEALTH_CHECK_CONTAINERS=(
     "mc-observability-mcp-influx"
 )
 
+# Consecutive 10s polls a container must stay in Created/Exited before it's
+# treated as a genuine failure. Containers with a restart policy (unless-stopped,
+# on-failure) can blip through Exited between crash and Docker's auto-restart --
+# mc-observability-influx in particular exits by design during its own init
+# (see docker-compose.yaml), so a single snapshot of Exited is not conclusive.
+EXIT_STREAK_THRESHOLD=3
+
 # =============================================================================
 # Startup Waves (reduce resource contention from starting 60+ services at once)
 # =============================================================================
@@ -591,6 +598,9 @@ case $RUN_MODE in
             local all_healthy=false
             local check_count=0
             local max_checks=120  # 20 minutes (120 * 10 seconds)
+            # Tracks consecutive Created/Exited sightings per container across
+            # loop iterations, so a single restart-cycle blip isn't fatal.
+            local -A exit_streak=()
 
             while [ "$all_healthy" = false ] && [ $check_count -lt $max_checks ]; do
                 clear
@@ -631,6 +641,7 @@ case $RUN_MODE in
                         all_expected_running=false
                         missing_containers+=("$container")
                     elif echo "$line" | grep -q "Up"; then
+                        exit_streak[$container]=0
                         running_count=$((running_count + 1))
 
                         # Containers without health check are treated as successful when Up
@@ -650,10 +661,15 @@ case $RUN_MODE in
                             fi
                         fi
                     elif echo "$line" | grep -qE "Created|Exited"; then
-                        # Compose created it but the graph aborted before start --
-                        # this will not resolve on its own, unlike "still pulling"
+                        # Could be the graph aborting before start, or a
+                        # restart-policy container mid-crash-cycle -- only
+                        # treat it as fatal once it's stayed this way across
+                        # several polls, unlike "still pulling"
                         all_expected_running=false
-                        failed_containers+=("$container: $(echo "$line" | awk -F'\t' '{print $2}')")
+                        exit_streak[$container]=$(( ${exit_streak[$container]:-0} + 1 ))
+                        if [ "${exit_streak[$container]}" -ge "$EXIT_STREAK_THRESHOLD" ]; then
+                            failed_containers+=("$container: $(echo "$line" | awk -F'\t' '{print $2}')")
+                        fi
                     fi
                 done
 
