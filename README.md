@@ -243,6 +243,11 @@ cd mc-admin-cli/bin
 
 > **When to run cleanAll.sh**: Always run a full clean before switching deployment modes (dev ↔ prod) or changing the domain. Re-running `installAll.sh` over an existing setup without cleaning first can leave stale certificates, nginx config, or DB state that conflicts with the new configuration.
 
+If you only need to reset containers/volumes but want to avoid re-pulling every image on the next `installAll.sh` run (e.g. to stay under a Docker Hub pull quota), use `--keep-current-images`. This still deletes containers/volumes/networks as usual, keeps the image versions currently pinned in `conf/docker/docker-compose.yaml`, and only removes older versions of those same images:
+```shell
+./cleanAll.sh --keep-current-images
+```
+
 ---
 
 ## Known Issues
