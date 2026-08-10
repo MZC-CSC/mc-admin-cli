@@ -695,6 +695,40 @@ update_public_service_urls() {
         return 1
     fi
 
+    # mc-web-console-front: the console's own public URL. The menu schema defaults
+    # framework_service to this name (mcmp_menus), so iframe menus resolve their
+    # host through it and fail with "service URL not found" if it is missing.
+    local console_front_port="${MC_WEB_CONSOLE_FRONT_PORT:-3001}"
+    local console_front_public_url="${MC_WEB_CONSOLE_FRONT_PUBLIC_HOST:-${public_scheme}://${MC_IAM_MANAGER_PUBLIC_DOMAIN}:${console_front_port}}"
+    reg_body=$(printf '{"name":"mc-web-console-front","version":"v0.0.1","baseUrl":"http://mc-web-console-front:%s","authType":"none","authUser":"","authPass":"","isActive":true}' "${console_front_port}")
+    reg_resp=$(curl -s -w "HTTPSTATUS:%{http_code}" -X POST \
+        --header "Authorization: Bearer $MC_IAM_MANAGER_PLATFORMADMIN_ACCESSTOKEN" \
+        --header 'Content-Type: application/json' \
+        --data "$reg_body" \
+        "$MC_IAM_MANAGER_HOST/api/mcmp-apis")
+    reg_code=$(echo $reg_resp | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+    if [ "$reg_code" = "201" ]; then
+        echo "  ✓ mc-web-console-front registered"
+    elif [ "$reg_code" = "409" ]; then
+        echo "  ✓ mc-web-console-front already registered"
+    else
+        echo "  ✗ Failed to register mc-web-console-front (HTTP $reg_code)"
+        return 1
+    fi
+    response=$(curl -s -w "HTTPSTATUS:%{http_code}" -X PUT \
+        --header "Authorization: Bearer $MC_IAM_MANAGER_PLATFORMADMIN_ACCESSTOKEN" \
+        --header 'Content-Type: application/json' \
+        --data "{\"base_url\": \"${console_front_public_url}\"}" \
+        "$MC_IAM_MANAGER_HOST/api/mcmp-apis/name/mc-web-console-front")
+    http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+    response_body=$(echo $response | sed -e 's/HTTPSTATUS\:.*//g')
+    if [ "$http_code" = "200" ]; then
+        echo "  ✓ Updated mc-web-console-front baseurl: ${console_front_public_url}"
+    else
+        echo "  ✗ Failed to update mc-web-console-front (HTTP $http_code): $response_body"
+        return 1
+    fi
+
     echo "Public service URL update completed"
     return 0
 }
