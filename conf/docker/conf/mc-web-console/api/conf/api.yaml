@@ -924,6 +924,10 @@ serviceActions:
       method: post
       resourcePath: /api/users/workspaces/list
       description: "workspace - user - role mapping 목록 user 기준 조회"
+    listUserProjectsByWorkspace:
+      method: get
+      resourcePath: /api/users/workspaces/id/{workspaceId}/projects/list
+      description: "workspace - user - role mapping 목록 workspaceId 기준 project 조회 (platformAdmin은 소속 무관 조회 가능)"
     Deleteworkspaceuserrolemapping:
       method: delete
       resourcePath: /api/wsuserrole/workspace/id/{workspaceId}/user/id/{userId}

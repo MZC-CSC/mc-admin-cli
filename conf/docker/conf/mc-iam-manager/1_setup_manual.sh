@@ -66,7 +66,7 @@ login() {
 
 init_predefined_roles() {
     echo "Initializing platform roles..."
-    IFS=',' read -ra ROLES <<< "$PREDEFINED_ROLE"
+    IFS=',' read -ra ROLES <<< "$MC_IAM_MANAGER_PREDEFINED_ROLE"
     for role in "${ROLES[@]}"; do
         echo "Creating role: $role"
         json_data=$(jq -n --arg name "$role" --arg description "$role Role" \
