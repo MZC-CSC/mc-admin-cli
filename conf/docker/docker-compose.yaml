@@ -1010,7 +1010,7 @@ services:
   mc-data-manager-init-volumes:
     image: busybox:stable
     container_name: mc-data-manager-init-volumes
-    command: ["sh", "-c", "chown -R ${UID:-0}:${GID:-0} /app/data"]
+    command: ["sh", "-c", "chown -R ${MC_DATA_MANAGER_UID:-0}:${MC_DATA_MANAGER_GID:-0} /app/data"]
     volumes:
       - ./conf/mc-data-manager/data:/app/data/
     user: root
@@ -1618,7 +1618,7 @@ services:
         protocol: tcp
     environment:
       - TZ=Asia/Seoul
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://210.207.104.224:11434}
+      - OLLAMA_BASE_URL=${MC_OBSERVABILITY_OLLAMA_BASE_URL:-http://210.207.104.224:11434}
     volumes:
       - shared_logs:/mc-insight/log:rw
     depends_on:
@@ -1703,7 +1703,7 @@ services:
         condition: service_healthy
     environment:
       - GRAFANA_URL=http://mc-observability-grafana:3000
-      - GRAFANA_API_KEY=${GRAFANA_API_KEY:-}
+      - GRAFANA_API_KEY=${MC_OBSERVABILITY_GRAFANA_API_KEY:-}
     entrypoint: ["/bin/bash", "/app/docker-entrypoint.sh"]
     command: ["/bin/bash", "-c", "chmod +x /app/docker-entrypoint.sh"]
     volumes:
@@ -1734,7 +1734,7 @@ services:
       - DB_NAME=mc_observability
       - MCP_READ_ONLY=true
       - MCP_MAX_POOL_SIZE=10
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_KEY=${MC_OBSERVABILITY_OPENAI_API_KEY:-}
 
   mc-observability-mcp-influx:
     image: cloudbaristaorg/mc-observability-mcp-influxdb:0.6.0
