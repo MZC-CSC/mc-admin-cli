@@ -81,6 +81,8 @@ init_predefined_roles() {
     echo "Platform roles initialized"
 }
 
+# IAM now chains role-menu permission seeding onto POST /api/setup/initial-menus
+# server-side, so option 4) below no longer calls init_menu_permissions separately.
 init_menu() {
     echo "Initializing menu data..."
     wget -q -O ./menu.yaml "$MC_WEB_CONSOLE_MENUYAML"
@@ -92,8 +94,10 @@ init_menu() {
     echo "Menu data initialized"
 }
 
-# Seed role-menu mappings via YAML API (no filePath — IAM uses
-# MC_WEB_CONSOLE_MENU_PERMISSIONS or mounted asset/menu/permission.yaml).
+# Manual re-seed only (option 4a below) — option 4) no longer calls this
+# (init_menu chains it server-side). Seed role-menu mappings via YAML API
+# (no filePath — IAM uses MC_WEB_CONSOLE_MENU_PERMISSIONS or mounted
+# asset/menu/permission.yaml).
 init_menu_permissions() {
     echo "Initializing role-menu permissions from YAML..."
 
@@ -260,7 +264,7 @@ while true; do
     echo "1. Init Platform And PlatformAdmin"
     echo "2. PlatformAdmin Login"
     echo "3. Init Role Data"
-    echo "4. Init Menu Data (+ role-menu YAML permissions)"
+    echo "4. Init Menu Data (role-menu YAML permissions chained server-side)"
     echo "4a. Init Menu Role Permissions (YAML) (re-seed only)"
     echo "5. Init API Resource Data"
     echo "6. Init Cloud Resource Data"
@@ -297,7 +301,6 @@ while true; do
                 echo "Current token value: '$MC_IAM_MANAGER_PLATFORMADMIN_ACCESSTOKEN'"
             else
                 init_menu
-                init_menu_permissions
             fi
             ;;
         4a)
