@@ -196,7 +196,7 @@ curl -k https://<DOMAIN>/auth/realms/mciam/.well-known/openid-configuration | gr
 ```
 Expected: `"issuer": "https://<DOMAIN>/auth/realms/mciam"` — must start with `https://` and include `/auth/`.
 
-**(d) mc-iam-manager-post-initial 8-step setup:**
+**(d) mc-iam-manager-post-initial 11-step setup:**
 ```shell
 docker logs mc-iam-manager-post-initial | tail -5
 ```
@@ -449,7 +449,7 @@ cd bin && ./mcc infra info
 docker rm mc-iam-manager-post-initial 2>/dev/null
 ./mcc infra run -s mc-iam-manager-post-initial
 docker logs -f mc-iam-manager-post-initial
-# Each of the 8 setup steps should finish with ✓
+# Each of the 11 setup steps should finish with ✓
 
 # 3. Verify
 curl -s http://localhost:5000/readyz | jq .

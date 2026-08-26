@@ -43,15 +43,6 @@ auto_setup() {
     fi
     echo "✓ Menu data initialized successfully"
 
-    # 4-1. Role-menu permissions from YAML (after menus; fail-fast if IAM lacks YAML API)
-    echo "Step 4-1: Initializing role-menu permissions from YAML..."
-    init_menu_permissions
-    if [ $? -ne 0 ]; then
-        echo "ERROR: Role-menu permission (YAML) initialization failed"
-        return 1
-    fi
-    echo "✓ Role-menu permissions initialized successfully"
-    
     # 5. API resource data initialization
     echo "Step 5: Initializing API resources..."
     init_api_resources
@@ -288,6 +279,8 @@ init_predefined_roles() {
     return 0
 }
 
+# IAM now chains role-menu permission seeding onto POST /api/setup/initial-menus
+# server-side, so auto_setup no longer calls init_menu_permissions separately.
 init_menu() {
     echo "Initializing menu data..."
     wget -q -O ./menu.yaml "$MC_WEB_CONSOLE_MENUYAML"
@@ -321,7 +314,9 @@ init_menu() {
     return 0
 }
 
-# Seed role-menu mappings via YAML API.
+# Manual re-seed only — auto_setup no longer calls this (init_menu chains it
+# server-side). Use this to re-seed role-menu permissions without re-running
+# the whole menu setup.
 # Always call without filePath: IAM resolvePermissionSeedPath uses
 # MC_WEB_CONSOLE_MENU_PERMISSIONS (if set and .yaml/.yml) or mounted
 # /app/asset/menu/permission.yaml. Do not pass post-init ./permission.yaml
