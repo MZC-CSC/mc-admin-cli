@@ -17,7 +17,7 @@ If you have any difficulties in using mcc, please let us know.
 - Management tool that supports the installation, execution, status information provision, termination, and API calls of the M-CMP system.
 - Currently, infra subcommand is only support docker compose base infra install and management.
   - [infra subcommand](./docs/mc-admin-cli-infra.md)
-- If you want to checkout how to run the whole subsystem on the single instance on CSP Instance, see [this document](./docs/mc-admin-cli-infra.md).
+- If you want to checkout how to run the whole subsystem on the single instance on CSP Instance, see [this document](./docs/running-on-instance.md).
 
 ## Development & Test Environment
 - Go 1.25.0 (minimum required version)
@@ -197,6 +197,9 @@ curl -k https://<DOMAIN>/auth/realms/mciam/.well-known/openid-configuration | gr
 Expected: `"issuer": "https://<DOMAIN>/auth/realms/mciam"` — must start with `https://` and include `/auth/`.
 
 **(d) mc-iam-manager-post-initial 11-step setup:**
+
+Among other things, these steps register the platform's menu catalog (from mc-web-console's canonical menu yaml) and seed role-menu permissions — both chained into a single server-side call, so a single step covers both.
+
 ```shell
 docker logs mc-iam-manager-post-initial | tail -5
 ```
