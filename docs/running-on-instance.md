@@ -85,10 +85,10 @@ For stable deployment, clone a specific [released version](https://github.com/m-
 ```bash
 git clone https://github.com/m-cmp/mc-admin-cli.git -b v0.5.0
 cd mc-admin-cli/bin
-./mcc --version   # optional: confirm the pre-built binary runs on this OS
+./mcc --help   # optional: confirm the pre-built binary runs on this OS
 ```
 
-If `./mcc --version` fails with a `GLIBC` version error (e.g. on Ubuntu 20.04), rebuild from source as a static binary — see the main [README's "Build a Static Binary" section](https://github.com/m-cmp/mc-admin-cli#build-a-static-binary).
+If `./mcc --help` fails with a `GLIBC` version error (e.g. on Ubuntu 20.04), rebuild from source as a static binary — see the main [README's "Build a Static Binary" section](https://github.com/m-cmp/mc-admin-cli#build-a-static-binary).
 
 ## Step 4: Configure Environment
 

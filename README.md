@@ -119,7 +119,7 @@ cd mc-admin-cli/bin
 
 Before proceeding, confirm the pre-built binary runs on your system:
 ```shell
-./mcc --version
+./mcc --help
 ```
 
 If you see an error like:
