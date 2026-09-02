@@ -197,6 +197,9 @@ curl -k https://<DOMAIN>/auth/realms/mciam/.well-known/openid-configuration | gr
 Expected: `"issuer": "https://<DOMAIN>/auth/realms/mciam"` — must start with `https://` and include `/auth/`.
 
 **(d) mc-iam-manager-post-initial 11-step setup:**
+
+Among other things, these steps register the platform's menu catalog (from mc-web-console's canonical menu yaml) and seed role-menu permissions — both chained into a single server-side call, so a single step covers both.
+
 ```shell
 docker logs mc-iam-manager-post-initial | tail -5
 ```
