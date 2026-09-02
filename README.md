@@ -17,7 +17,7 @@ If you have any difficulties in using mcc, please let us know.
 - Management tool that supports the installation, execution, status information provision, termination, and API calls of the M-CMP system.
 - Currently, infra subcommand is only support docker compose base infra install and management.
   - [infra subcommand](./docs/mc-admin-cli-infra.md)
-- If you want to checkout how to run the whole subsystem on the single instance on CSP Instance, see [this document](./docs/mc-admin-cli-infra.md).
+- If you want to checkout how to run the whole subsystem on the single instance on CSP Instance, see [this document](./docs/running-on-instance.md).
 
 ## Development & Test Environment
 - Go 1.25.0 (minimum required version)
