@@ -259,8 +259,6 @@ services:
         condition: service_healthy
       mc-iam-manager-kc:
         condition: service_healthy
-      mc-iam-manager-nginx:
-        condition: service_started
       mc-infra-manager:
         condition: service_healthy
     environment:
@@ -367,6 +365,9 @@ services:
       - ./container-volume/certbot/www:/var/www/certbot:ro
     depends_on:
       - mc-iam-manager-kc
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/nginx-health || exit 1" ]
+      <<: *default-health-check
     networks:
       - mc-iam-manager-network
       - mc-observability-network
