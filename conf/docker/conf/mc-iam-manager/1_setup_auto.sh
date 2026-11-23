@@ -798,11 +798,10 @@ init_aws_csp_config() {
 
     local OIDC_PROVIDER_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/${DOMAIN}/auth/realms/${REALM}"
     local ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${PREFIX}-platformadmin"
-    local CSP_ROLE_NAME="${PREFIX}-platformadmin"
 
     echo "  Account ID    : $ACCOUNT_ID"
     echo "  OIDC Provider : $OIDC_PROVIDER_ARN"
-    echo "  IAM Role      : $ROLE_ARN"
+    echo "  Mgmt Role     : $ROLE_ARN (IdP Config role_arn, not mapped to users)"
 
     # --- Step 1: mcmp_csp_accounts 생성 --- POST /api/csp-accounts
     # list-first 패턴: 기존 항목이 있으면 ID를 가져오고, 없으면 생성
@@ -881,57 +880,48 @@ init_aws_csp_config() {
     fi
     [ -z "$IDP_CONFIG_ID" ] && { echo "  ✗ CspIdpConfig ID not found"; return 1; }
 
-    # --- Step 3: mcmp_role_csp_roles 등록 — POST /api/roles/csp ---
-    # 소속 IdP Config 를 넘기면 IAM 이 계정과 idp_identifier(Config 의 Provider ARN)를 채운다
-    local csp_role_resp
-    csp_role_resp=$(curl -s -w "\n%{http_code}" -X POST \
-        -H "Authorization: Bearer $MC_IAM_MANAGER_PLATFORMADMIN_ACCESSTOKEN" \
-        -H "Content-Type: application/json" \
-        "$MC_IAM_MANAGER_HOST/api/roles/csp" \
-        -d "{\"cspRoleName\":\"${CSP_ROLE_NAME}\",\"cspType\":\"aws\",\"authMethod\":\"OIDC\",\"cspIdpConfigId\":${IDP_CONFIG_ID}}")
-    http_code=$(echo "$csp_role_resp" | tail -1)
-    local csp_role_body
-    csp_role_body=$(echo "$csp_role_resp" | sed '$d')
-    if [ "$http_code" = "201" ] || [ "$http_code" = "200" ]; then
-        echo "  ✓ CspRole registered"
-    else
-        echo "  ✗ CspRole registration failed (HTTP $http_code): $csp_role_body"
-        return 1
-    fi
+    # 관리용 Role(${PREFIX}-platformadmin, Config 의 role_arn)은 IAM 이 AWS 에 쓸 때 assume 하는 Role 이다.
+    # 사용자 매핑 대상이 아니므로 CspRole 로 등록하거나 Master Role 에 매핑하지 않는다 (예전 Step 3·4, ADMINCLI-BUG-011).
+    # IAM 은 관리용 Role 의 등록·매핑을 409 로 막는다.
 
-    local CSP_ROLE_ID
-    CSP_ROLE_ID=$(echo "$csp_role_body" | jq -r '.id // empty' 2>/dev/null)
-    [ -z "$CSP_ROLE_ID" ] && { echo "  ✗ CspRole ID not found in response"; return 1; }
-
-    # --- Step 4: mcmp_role_csp_role_mappings — POST /api/roles/csp-roles ---
-    for role_name in admin operator viewer billadmin billviewer; do
-        # 역할 ID 조회
-        local role_resp role_id
-        role_resp=$(curl -s -X POST \
+    # --- Step 3: Master Role X → 대상 CSP Role mciam-X 매핑 — PUT /api/roles/id/{id} (cspRoles) ---
+    # IAM 이 대상 CSP 에 mciam-X 가 있으면 등록 후 매핑, 없으면 Config 기반 신뢰 정책으로 생성 후 매핑한다(권한 정책은 붙이지 않음).
+    # 이름은 X 만 보내고 mciam- 접두사는 IAM 이 붙인다(PREFIX 가 mciam 이 아니어도 이중 접두사 없음).
+    # 기존 Sub 에 csp 를 더하고 description 은 유지한다. 다시 실행하면 unchanged. 항목 실패는 경고만 하고 계속한다.
+    local roles_csv="${MC_IAM_MANAGER_PREDEFINED_ROLE:-admin,operator,viewer,billadmin,billviewer}"
+    local role_name role_json role_id put_body put_resp put_code put_out
+    IFS=',' read -ra CSP_MAPPED_ROLES <<< "$roles_csv"
+    for role_name in "${CSP_MAPPED_ROLES[@]}"; do
+        role_name="$(echo "$role_name" | xargs)"
+        [ -z "$role_name" ] && continue
+        role_json=$(curl -s -X POST \
             -H "Authorization: Bearer $MC_IAM_MANAGER_PLATFORMADMIN_ACCESSTOKEN" \
             -H "Content-Type: application/json" \
             "$MC_IAM_MANAGER_HOST/api/roles/list" \
-            -d "{\"roleName\":\"${role_name}\"}")
-        role_id=$(echo "$role_resp" | jq -r '.[0].id // empty' 2>/dev/null)
+            -d "{\"roleName\":\"${role_name}\"}" | jq -c --arg n "$role_name" 'if type == "array" then ([.[] | select(.name == $n)][0] // empty) else empty end' 2>/dev/null)
+        role_id=$(echo "$role_json" | jq -r '.id // empty' 2>/dev/null)
         if [ -z "$role_id" ]; then
             echo "  ⓘ Role '${role_name}' not found, skipping"
             continue
         fi
-        local mapping_resp mapping_body mapping_code
-        mapping_resp=$(curl -s -w "\n%{http_code}" -X POST \
+        put_body=$(echo "$role_json" | jq -c --arg n "$role_name" --argjson cfg "$IDP_CONFIG_ID" \
+            '{name: .name, description: (.description // ""), parentId: .parent_id,
+              roleTypes: (([.role_subs[]?.role_type] + ["csp"]) | unique),
+              cspRoles: [{cspRoleName: $n, cspType: "aws", authMethod: "OIDC", cspIdpConfigId: $cfg}]}')
+        put_resp=$(curl -s -w "\n%{http_code}" -X PUT \
             -H "Authorization: Bearer $MC_IAM_MANAGER_PLATFORMADMIN_ACCESSTOKEN" \
             -H "Content-Type: application/json" \
-            "$MC_IAM_MANAGER_HOST/api/roles/csp-roles" \
-            -d "{\"roleId\":\"${role_id}\",\"cspRoleId\":\"${CSP_ROLE_ID}\",\"authMethod\":\"OIDC\",\"cspType\":\"aws\"}")
-        mapping_code=$(echo "$mapping_resp" | tail -1)
-        mapping_body=$(echo "$mapping_resp" | sed '$d')
-        if [ "$mapping_code" = "201" ] || [ "$mapping_code" = "200" ]; then
-            echo "  ✓ Mapped: ${role_name} → ${CSP_ROLE_NAME}"
-        elif echo "$mapping_body" | grep -q "already exists"; then
-            echo "  ⓘ Mapping exists: ${role_name}"
-        else
-            echo "  ✗ Mapping failed: ${role_name} (HTTP $mapping_code)"
+            "$MC_IAM_MANAGER_HOST/api/roles/id/${role_id}" \
+            -d "$put_body")
+        put_code=$(echo "$put_resp" | tail -1)
+        put_out=$(echo "$put_resp" | sed '$d')
+        if [ "$put_code" != "200" ]; then
+            echo "  ⚠️  ${role_name}: CSP role mapping request failed (HTTP $put_code): $put_out"
+            continue
         fi
+        echo "$put_out" | jq -r --arg n "$role_name" '.cspRoleResults[]? |
+            if .result == "failed" then "  ⚠️  \($n) → \(.cspRoleName): not mapped (\(.errorCode // "error")): \(.error // "")"
+            else "  ✓ \($n) → \(.cspRoleName): \(.result)" end' 2>/dev/null
     done
     return 0
 }
