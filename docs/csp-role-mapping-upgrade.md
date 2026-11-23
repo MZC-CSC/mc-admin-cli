@@ -70,6 +70,33 @@ aws iam simulate-principal-policy \
 {"Effect": "Allow", "Action": "iam:GetOpenIDConnectProvider", "Resource": "arn:aws:iam::<account>:oidc-provider/*"}
 ```
 
-### 5. Check the result
+### 5. Check the management role's permissions for CSP policies
+IAM applies CSP policy changes in AWS:
+- attachPolicy·detachPolicy (managed and custom): `AttachRolePolicy`, `DetachRolePolicy`
+- attachPolicy·detachPolicy (inline): `PutRolePolicy`, `DeleteRolePolicy`
+- custom (customer managed) policy create, document update and delete: `CreatePolicy`, `CreatePolicyVersion`, `ListPolicyVersions`, `DeletePolicyVersion`, `DeletePolicy`, `GetPolicy`, `GetPolicyVersion`
+  - IAM only creates, changes or deletes customer managed policies named `mciam-*`.
+- sync: `ListPolicies`
+
+Without these permissions the request fails with 502, or the attachment is kept with `aws_status=failed`.
+
+Check the policy-level actions:
+```bash
+aws iam simulate-principal-policy \
+  --policy-source-arn arn:aws:iam::<account>:role/<management role> \
+  --action-names iam:CreatePolicy iam:CreatePolicyVersion iam:ListPolicyVersions iam:DeletePolicyVersion iam:DeletePolicy iam:GetPolicy iam:GetPolicyVersion \
+  --resource-arns arn:aws:iam::<account>:policy/mciam-check \
+  --query 'EvaluationResults[].[EvalActionName,EvalDecision]' --output text
+```
+
+`allowed` for every action means no change is needed. Roles with `IAMFullAccess` already allow them. Otherwise add these statements to the management role (approval required, it is a shared role). The role-level actions above use `Resource: arn:aws:iam::<account>:role/mciam-*`.
+```json
+{"Sid": "MciamPolicyDefinition", "Effect": "Allow",
+ "Action": ["iam:GetPolicy", "iam:GetPolicyVersion", "iam:ListPolicyVersions", "iam:CreatePolicy", "iam:CreatePolicyVersion", "iam:DeletePolicyVersion", "iam:DeletePolicy"],
+ "Resource": "arn:aws:iam::<account>:policy/mciam-*"},
+{"Sid": "MciamPolicyList", "Effect": "Allow", "Action": ["iam:ListPolicies"], "Resource": "*"}
+```
+
+### 6. Check the result
 - Users get temporary credentials as `assumed-role/mciam-<role>/...`, not as the management role.
 - Attach permission policies to the new `mciam-*` roles as needed.
