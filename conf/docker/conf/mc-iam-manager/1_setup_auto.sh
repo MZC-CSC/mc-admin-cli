@@ -152,6 +152,13 @@ init_platform_admin() {
         return 1
     fi
     
+    # mc-iam-manager 0.7.3+ 는 설치가 끝난 뒤(platformAdmin 사용자가 있으면) initial-admin 을 403 으로 막는다 (IAM-BUG-014).
+    # 재실행(업그레이드 후 부트스트랩 등)에서는 이미 초기화된 것이므로 건너뛰고 다음 단계로 진행한다.
+    if [ "$http_code" = "403" ] && echo "$response_body" | grep -q "already initialized"; then
+        echo "ⓘ Platform admin is already initialized — skipping initial-admin"
+        return 0
+    fi
+
     # Check HTTP status code
     if [ "$http_code" != "200" ] && [ "$http_code" != "201" ]; then
         echo "ERROR: Platform admin initialization failed with HTTP status $http_code"
