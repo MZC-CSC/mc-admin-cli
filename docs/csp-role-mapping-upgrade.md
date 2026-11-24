@@ -76,9 +76,10 @@ IAM applies CSP policy changes in AWS:
 - attachPolicy·detachPolicy (inline): `PutRolePolicy`, `DeleteRolePolicy`
 - custom (customer managed) policy create, document update and delete: `CreatePolicy`, `CreatePolicyVersion`, `ListPolicyVersions`, `DeletePolicyVersion`, `DeletePolicy`, `GetPolicy`, `GetPolicyVersion`
   - IAM only creates, changes or deletes customer managed policies named `mciam-*`.
+- AWS managed policy document lookup: `GetPolicy`, `GetPolicyVersion` on `arn:aws:iam::aws:policy/*`
 - sync: `ListPolicies`
 
-Without these permissions the request fails with 502, or the attachment is kept with `aws_status=failed`.
+Without these permissions the request fails with 502, or the attachment is kept with `aws_status=failed`. Without the AWS managed policy read permission, opening the document of an AWS managed policy fails.
 
 Check the policy-level actions:
 ```bash
@@ -94,7 +95,8 @@ aws iam simulate-principal-policy \
 {"Sid": "MciamPolicyDefinition", "Effect": "Allow",
  "Action": ["iam:GetPolicy", "iam:GetPolicyVersion", "iam:ListPolicyVersions", "iam:CreatePolicy", "iam:CreatePolicyVersion", "iam:DeletePolicyVersion", "iam:DeletePolicy"],
  "Resource": "arn:aws:iam::<account>:policy/mciam-*"},
-{"Sid": "MciamPolicyList", "Effect": "Allow", "Action": ["iam:ListPolicies"], "Resource": "*"}
+{"Sid": "MciamPolicyList", "Effect": "Allow", "Action": ["iam:ListPolicies"], "Resource": "*"},
+{"Sid": "MciamAwsManagedPolicyRead", "Effect": "Allow", "Action": ["iam:GetPolicy", "iam:GetPolicyVersion"], "Resource": "arn:aws:iam::aws:policy/*"}
 ```
 
 ### 6. Check the result
