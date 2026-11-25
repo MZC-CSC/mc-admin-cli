@@ -78,6 +78,8 @@ IAM applies CSP policy changes in AWS:
   - IAM only creates, changes or deletes customer managed policies named `mciam-*`.
 - AWS managed policy document lookup: `GetPolicy`, `GetPolicyVersion` on `arn:aws:iam::aws:policy/*`
 - sync: `ListPolicies`
+- CSP role delete: `ListAttachedRolePolicies`, `ListRolePolicies`, `ListInstanceProfilesForRole` (`role/mciam-*`). Before deleting a role IAM created, IAM checks that nothing else is attached
+  - Without `ListInstanceProfilesForRole`, deleting a CSP role that IAM created fails with 502 and nothing is changed
 
 Without these permissions the request fails with 502, or the attachment is kept with `aws_status=failed`. Without the AWS managed policy read permission, opening the document of an AWS managed policy fails.
 
@@ -96,7 +98,8 @@ aws iam simulate-principal-policy \
  "Action": ["iam:GetPolicy", "iam:GetPolicyVersion", "iam:ListPolicyVersions", "iam:CreatePolicy", "iam:CreatePolicyVersion", "iam:DeletePolicyVersion", "iam:DeletePolicy"],
  "Resource": "arn:aws:iam::<account>:policy/mciam-*"},
 {"Sid": "MciamPolicyList", "Effect": "Allow", "Action": ["iam:ListPolicies"], "Resource": "*"},
-{"Sid": "MciamAwsManagedPolicyRead", "Effect": "Allow", "Action": ["iam:GetPolicy", "iam:GetPolicyVersion"], "Resource": "arn:aws:iam::aws:policy/*"}
+{"Sid": "MciamAwsManagedPolicyRead", "Effect": "Allow", "Action": ["iam:GetPolicy", "iam:GetPolicyVersion"], "Resource": "arn:aws:iam::aws:policy/*"},
+{"Sid": "MciamRoleInstanceProfileRead", "Effect": "Allow", "Action": ["iam:ListInstanceProfilesForRole"], "Resource": "arn:aws:iam::<account>:role/mciam-*"}
 ```
 
 ### 6. Check the result
