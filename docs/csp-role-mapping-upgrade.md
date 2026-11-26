@@ -2,6 +2,8 @@
 
 Applies to mc-iam-manager 0.7.3 and the matching mc-admin-cli bootstrap (`conf/docker/conf/mc-iam-manager/1_setup_auto.sh`, `init_aws_csp_config`).
 
+The bootstrap sets up AWS OIDC only. For AWS SAML, see the mc-iam-manager wiki: [AWS SAML 구성 절차 (KO)](https://github.com/MZC-CSC/mc-iam-manager/wiki/CSP-AWS-SAML-Guide-ko).
+
 ## What changed
 
 | Step | Before | Now |
