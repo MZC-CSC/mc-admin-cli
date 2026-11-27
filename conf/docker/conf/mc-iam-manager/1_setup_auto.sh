@@ -783,6 +783,9 @@ map_api_cloud_resources() {
 
 init_aws_csp_config() {
     local ACCOUNT_ID="${MC_IAM_MANAGER_AWS_ACCOUNT_ID:-}"
+    # CSP 계정 기본 리전 (account_info.region). 임시자격증명 요청에 region 이 없을 때 mc-iam-manager 가 이 값을 쓴다.
+    # .env 의 MC_IAM_MANAGER_AWS_REGION → AWS_REGION → ap-northeast-2 순 (최초 설정에만 사용)
+    local ACCOUNT_REGION="${MC_IAM_MANAGER_AWS_REGION:-${AWS_REGION:-ap-northeast-2}}"
     local DOMAIN="${MC_IAM_MANAGER_PUBLIC_DOMAIN:-}"
     local REALM="${MC_IAM_MANAGER_KEYCLOAK_REALM:-mciam}"
     local PREFIX="${MC_IAM_MANAGER_CSP_ROLE_PREFIX:-mciam}"
@@ -807,6 +810,7 @@ init_aws_csp_config() {
     local ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${PREFIX}-platformadmin"
 
     echo "  Account ID    : $ACCOUNT_ID"
+    echo "  Region        : $ACCOUNT_REGION (CSP account default region)"
     echo "  OIDC Provider : $OIDC_PROVIDER_ARN"
     echo "  Mgmt Role     : $ROLE_ARN (IdP Config role_arn, not mapped to users)"
 
@@ -827,7 +831,7 @@ init_aws_csp_config() {
             -H "Authorization: Bearer $MC_IAM_MANAGER_PLATFORMADMIN_ACCESSTOKEN" \
             -H "Content-Type: application/json" \
             "$MC_IAM_MANAGER_HOST/api/csp-accounts" \
-            -d "{\"name\":\"aws-default\",\"csp_type\":\"aws\",\"account_info\":{\"account_id\":\"${ACCOUNT_ID}\",\"region\":\"ap-northeast-2\"}}")
+            -d "{\"name\":\"aws-default\",\"csp_type\":\"aws\",\"account_info\":{\"account_id\":\"${ACCOUNT_ID}\",\"region\":\"${ACCOUNT_REGION}\"}}")
         http_code=$(echo "$account_resp" | tail -1)
         account_body=$(echo "$account_resp" | sed '$d')
         if [ "$http_code" = "201" ] || [ "$http_code" = "200" ]; then
@@ -843,6 +847,11 @@ init_aws_csp_config() {
         existing_account_id=$(echo "$ACCOUNT_JSON" | jq -r '.account_info.account_id // empty' 2>/dev/null)
         if [ "$existing_account_id" != "$ACCOUNT_ID" ]; then
             echo "  ⚠️  CspAccount account_id ('$existing_account_id') differs from .env ('$ACCOUNT_ID') — not changed (update via API)"
+        fi
+        local existing_region
+        existing_region=$(echo "$ACCOUNT_JSON" | jq -r '.account_info.region // empty' 2>/dev/null)
+        if [ "$existing_region" != "$ACCOUNT_REGION" ]; then
+            echo "  ⚠️  CspAccount region ('${existing_region:-none}') differs from .env ('$ACCOUNT_REGION') — not changed (update via PUT /api/csp-accounts/id/${ACCOUNT_DB_ID})"
         fi
     fi
     [ -z "$ACCOUNT_DB_ID" ] && { echo "  ✗ CspAccount ID not found"; return 1; }
