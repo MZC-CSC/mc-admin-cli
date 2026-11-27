@@ -783,9 +783,9 @@ map_api_cloud_resources() {
 
 init_aws_csp_config() {
     local ACCOUNT_ID="${MC_IAM_MANAGER_AWS_ACCOUNT_ID:-}"
-    # CSP 계정 기본 리전 (account_info.region). 임시자격증명 요청에 region 이 없을 때 mc-iam-manager 가 이 값을 쓴다.
-    # .env 의 MC_IAM_MANAGER_AWS_REGION → AWS_REGION → ap-northeast-2 순 (최초 설정에만 사용)
-    local ACCOUNT_REGION="${MC_IAM_MANAGER_AWS_REGION:-${AWS_REGION:-ap-northeast-2}}"
+    # AWS 기본 CSP 계정(aws-default)의 기본 리전(account_info.region). 최초 설정 때 계정을 만들 때만 쓴다.
+    # 임시자격증명 요청에 region 이 없으면 mc-iam-manager 가 이 계정 값을 쓴다. 이후 변경은 API(PUT /api/csp-accounts/id/:id) 또는 Cloud SP 화면.
+    local ACCOUNT_REGION="${MC_IAM_MANAGER_AWS_DEFAULT_REGION:-ap-northeast-2}"
     local DOMAIN="${MC_IAM_MANAGER_PUBLIC_DOMAIN:-}"
     local REALM="${MC_IAM_MANAGER_KEYCLOAK_REALM:-mciam}"
     local PREFIX="${MC_IAM_MANAGER_CSP_ROLE_PREFIX:-mciam}"
